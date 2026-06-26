@@ -1,9 +1,10 @@
 import { ComponentType, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { PieChart } from "react-native-gifted-charts";
 import {
   ShoppingBag,
   ChartLineUp,
@@ -24,6 +25,10 @@ import { useAuthStore } from "@/stores/authStore";
 import { useGroupStore } from "@/stores/groupStore";
 import { Button } from "@/components/ui/Button";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Card } from "@/components/ui/Card";
+import { Widget } from "@/components/ui/Widget";
+import { Colors, Radius, Typography } from "@/constants/theme";
+import { EXPENSE_CATEGORIES } from "@/constants";
 
 type Shortcut = {
   label: string;
@@ -36,11 +41,13 @@ type Shortcut = {
 // 일정/가계부는 위젯으로 분리했으므로 바로가기에서 제외
 const SHORTCUTS: Shortcut[] = [
   { label: "위시리스트", route: "/(tabs)/wishlist", Icon: ShoppingBag, color: "#db2777", bg: "bg-pink-50" },
-  { label: "재테크", route: "/(tabs)/invest", Icon: ChartLineUp, color: "#ea580c", bg: "bg-orange-50" },
-  { label: "언제와?", route: "/utility/when-coming", Icon: Clock, color: "#0891b2", bg: "bg-cyan-50" },
-  { label: "했어?", route: "/utility/did-you-do", Icon: CheckSquare, color: "#7c3aed", bg: "bg-violet-50" },
-  { label: "뭐먹지?", route: "/utility/what-to-eat", Icon: ForkKnife, color: "#d97706", bg: "bg-amber-50" },
+  { label: "재테크",    route: "/(tabs)/invest", Icon: ChartLineUp, color: "#ea580c", bg: "bg-orange-50" },
+  { label: "언제와?",   route: "/utility/when-coming", Icon: Clock, color: "#0891b2", bg: "bg-cyan-50" },
+  { label: "했어?",     route: "/utility/did-you-do", Icon: CheckSquare, color: "#7c3aed", bg: "bg-violet-50" },
+  { label: "뭐먹지?",   route: "/utility/what-to-eat", Icon: ForkKnife, color: "#d97706", bg: "bg-amber-50" },
 ];
+
+const PIE_COLORS = ["#9B8EC4", "#F4A261", "#6BCB8B", "#E07070", "#6CA0DC", "#DAB910"];
 
 const won = (n: number) => `₩${n.toLocaleString("ko-KR")}`;
 
@@ -77,11 +84,28 @@ export default function HomeScreen() {
       if (!activeGroup) return [];
       const { data } = await supabase
         .from("transactions")
-        .select("type, amount")
+        .select("type, amount, category")
         .eq("group_id", activeGroup.id)
         .gte("transacted_at", `${month}-01`)
         .lte("transacted_at", `${month}-31`);
       return data ?? [];
+    },
+    enabled: !!activeGroup,
+  });
+
+  // 계좌 잔고 = 그룹 전체 누적 수입 - 누적 지출
+  const { data: balance = 0 } = useQuery({
+    queryKey: ["home-balance", activeGroup?.id],
+    queryFn: async () => {
+      if (!activeGroup) return 0;
+      const { data } = await supabase
+        .from("transactions")
+        .select("type, amount")
+        .eq("group_id", activeGroup.id);
+      return (data ?? []).reduce(
+        (s: number, t: any) => s + (t.type === "income" ? t.amount : -t.amount),
+        0
+      );
     },
     enabled: !!activeGroup,
   });
@@ -93,17 +117,29 @@ export default function HomeScreen() {
     .filter((t: any) => t.type === "expense")
     .reduce((s: number, t: any) => s + t.amount, 0);
 
+  // 사용처(지출 카테고리) 도넛 데이터
+  const categoryTotals = EXPENSE_CATEGORIES.map((cat) => ({
+    label: cat.label,
+    total: monthTx
+      .filter((t: any) => t.type === "expense" && t.category === cat.id)
+      .reduce((s: number, t: any) => s + t.amount, 0),
+  })).filter((c) => c.total > 0);
+
+  const pieData = categoryTotals.map((c, i) => ({
+    value: c.total,
+    label: c.label,
+    color: PIE_COLORS[i % PIE_COLORS.length],
+  }));
+
   if (!activeGroup) {
     return (
-      <SafeAreaView className="flex-1 bg-white" edges={["top", "bottom"]}>
-        <View className="flex-1 justify-center items-center px-6">
-          <View className="w-20 h-20 rounded-full bg-primary-50 items-center justify-center mb-6">
-            <UsersThree size={40} color="#4f46e5" weight="duotone" />
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+        <View style={styles.emptyWrap}>
+          <View style={styles.emptyIcon}>
+            <UsersThree size={40} color={Colors.primary} weight="duotone" />
           </View>
-          <Text className="text-xl font-bold text-gray-900 mb-2">
-            아직 그룹이 없어요
-          </Text>
-          <Text className="text-gray-500 mb-8 text-center leading-5">
+          <Text style={styles.emptyTitle}>아직 그룹이 없어요</Text>
+          <Text style={styles.emptyDesc}>
             가족 그룹을 만들거나{"\n"}초대 코드로 참여해보세요.
           </Text>
           <Button
@@ -127,139 +163,147 @@ export default function HomeScreen() {
   const extraCount = Math.max(0, members.length - 3);
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50" edges={["top"]}>
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {/* 헤더 */}
-        <View className="bg-primary-600 px-5 pt-4 pb-10 rounded-b-3xl">
-          <View className="flex-row justify-between items-center mb-1">
-            <TouchableOpacity
-              className="flex-row items-center"
-              activeOpacity={groups.length > 1 ? 0.7 : 1}
-              onPress={() => groups.length > 1 && setGroupSheet(true)}
-              hitSlop={8}
-            >
-              <Text className="text-white text-lg font-bold">
-                {activeGroup.name}
-              </Text>
-              {groups.length > 1 && (
-                <CaretDown size={16} color="#ffffff" weight="bold" style={{ marginLeft: 4 }} />
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <Text style={styles.greeting}>
+              안녕하세요, {profile?.displayName}님 👋
+            </Text>
+            <TouchableOpacity onPress={signOut} style={styles.row} hitSlop={8}>
+              <SignOut size={16} color="#ffffff" />
+              <Text style={styles.logoutText}>로그아웃</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={groups.length > 1 ? 0.7 : 1}
+            onPress={() => groups.length > 1 && setGroupSheet(true)}
+            hitSlop={8}
+          >
+            <Text style={styles.groupName}>{activeGroup.name}</Text>
+            {groups.length > 1 && (
+              <CaretDown size={16} color="#ffffff" weight="bold" style={{ marginLeft: 4 }} />
+            )}
+          </TouchableOpacity>
+          <View style={styles.headerMember}>
+            <UsersThree size={16} color="#ffffff" weight="duotone" style={{ marginRight: 6 }} />
+            <TouchableOpacity activeOpacity={0.7} style={styles.row} onPress={() => setMemberSheet(true)}>
+              {previewMembers.map((m, i) => (
+                <View
+                  key={m.id}
+                  style={[styles.avatar, { marginLeft: i === 0 ? 0 : -10 }]}
+                >
+                  <Text style={styles.avatarText}>{m.profile.displayName[0]}</Text>
+                </View>
+              ))}
+              {extraCount > 0 && (
+                <View style={[styles.avatar, styles.avatarExtra, { marginLeft: -10 }]}>
+                  <Text style={styles.avatarExtraText}>+{extraCount}</Text>
+                </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={signOut}
-              className="flex-row items-center"
-              hitSlop={8}
-            >
-              <SignOut size={16} color="#c7d2fe" />
-              <Text className="text-primary-200 text-sm ml-1">로그아웃</Text>
-            </TouchableOpacity>
           </View>
-          <Text className="text-primary-200 text-sm">
-            안녕하세요, {profile?.displayName}님 👋
-          </Text>
         </View>
 
-        {/* 가족 멤버 위젯 — 타이틀 + 겹친 프로필 아이콘(최대 3) */}
-        <TouchableOpacity
-          className="mx-5 -mt-6 bg-white rounded-2xl p-5 shadow-sm mb-4 flex-row items-center justify-between"
-          activeOpacity={0.8}
-          onPress={() => setMemberSheet(true)}
-        >
-          <Text className="text-gray-900 font-semibold text-base">가족 멤버</Text>
-          <View className="flex-row items-center">
-            {previewMembers.map((m, i) => (
-              <View
-                key={m.id}
-                className="w-9 h-9 rounded-full bg-primary-100 border-2 border-white items-center justify-center"
-                style={{ marginLeft: i === 0 ? 0 : -10 }}
-              >
-                <Text className="text-primary-600 font-bold text-sm">
-                  {m.profile.displayName[0]}
-                </Text>
-              </View>
-            ))}
-            {extraCount > 0 && (
-              <View
-                className="w-9 h-9 rounded-full bg-gray-100 border-2 border-white items-center justify-center"
-                style={{ marginLeft: -10 }}
-              >
-                <Text className="text-gray-500 font-bold text-xs">
-                  +{extraCount}
-                </Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-
         {/* 일정 위젯 */}
-        <TouchableOpacity
-          className="mx-5 bg-white rounded-2xl p-5 shadow-sm mb-4"
-          activeOpacity={0.8}
-          onPress={() => router.push("/(tabs)/calendar")}
-        >
-          <View className="flex-row items-center mb-3">
-            <CalendarBlank size={16} color="#6b7280" weight="duotone" />
-            <Text className="text-gray-500 text-xs ml-1.5 font-medium">
-              오늘 일정
-            </Text>
+        <Widget>
+          <View style={styles.widgetHeader}>
+            <CalendarBlank size={16} color={Colors.textSub} weight="duotone" />
+            <Text style={styles.widgetTitle}>오늘 일정</Text>
           </View>
-          {todaySchedules.length === 0 ? (
-            <Text className="text-gray-400 text-sm">오늘 등록된 일정이 없어요.</Text>
-          ) : (
-            todaySchedules.map((s: any) => (
-              <View key={s.id} className="flex-row items-center mb-2 last:mb-0">
-                <View
-                  className="w-2 h-2 rounded-full mr-3"
-                  style={{ backgroundColor: s.color ?? "#6366f1" }}
-                />
-                <Text className="text-gray-800 flex-1" numberOfLines={1}>
-                  {s.title}
-                </Text>
-                <Text className="text-gray-400 text-sm ml-2">
-                  {s.is_all_day ? "종일" : format(new Date(s.start_at), "HH:mm")}
-                </Text>
-              </View>
-            ))
-          )}
-        </TouchableOpacity>
+          <Card onPress={() => router.push("/(tabs)/calendar")}>
+            {todaySchedules.length === 0 ? (
+              <Text style={styles.emptyText}>오늘 등록된 일정이 없어요.</Text>
+            ) : (
+              todaySchedules.map((s: any) => (
+                <View key={s.id} style={styles.scheduleRow}>
+                  <View
+                    style={[styles.dot, { backgroundColor: s.color ?? Colors.primary }]}
+                  />
+                  <Text style={styles.scheduleTitle} numberOfLines={1}>
+                    {s.title}
+                  </Text>
+                  <Text style={styles.scheduleTime}>
+                    {s.is_all_day ? "종일" : format(new Date(s.start_at), "HH:mm")}
+                  </Text>
+                </View>
+              ))
+            )}
+          </Card>
+        </Widget>
 
         {/* 가계부 위젯 */}
-        <TouchableOpacity
-          className="mx-5 bg-white rounded-2xl p-5 shadow-sm mb-4"
-          activeOpacity={0.8}
-          onPress={() => router.push("/(tabs)/finance")}
-        >
-          <View className="flex-row items-center mb-3">
-            <Wallet size={16} color="#6b7280" weight="duotone" />
-            <Text className="text-gray-500 text-xs ml-1.5 font-medium">
-              이번 달 가계부
-            </Text>
+        <Widget>
+          <View style={styles.widgetHeader}>
+            <Wallet size={16} color={Colors.textSub} weight="duotone" />
+            <Text style={styles.widgetTitle}>이번 달 가계부</Text>
           </View>
-          <View className="flex-row">
-            <View className="flex-1">
-              <Text className="text-gray-400 text-xs mb-1">수입</Text>
-              <Text className="text-green-600 font-bold text-base">
+
+          {/* 계좌 잔고 (full width) */}
+          <Card onPress={() => router.push("/(tabs)/finance")}>
+            <Text style={styles.financeLabel}>계좌 잔고</Text>
+            <Text style={[styles.financeValueLg, { color: Colors.text }]}>
+              {won(balance)}
+            </Text>
+          </Card>
+
+          {/* 수입 / 지출 */}
+          <View style={styles.financeRow}>
+            <Card onPress={() => router.push("/(tabs)/finance")} style={styles.financeHalf}>
+              <Text style={styles.financeLabel}>수입</Text>
+              <Text style={[styles.financeValue, { color: Colors.success }]}>
                 {won(income)}
               </Text>
-            </View>
-            <View className="flex-1">
-              <Text className="text-gray-400 text-xs mb-1">지출</Text>
-              <Text className="text-red-500 font-bold text-base">
+            </Card>
+            <Card onPress={() => router.push("/(tabs)/finance")} style={styles.financeHalf}>
+              <Text style={styles.financeLabel}>지출</Text>
+              <Text style={[styles.financeValue, { color: Colors.danger }]}>
                 {won(expense)}
               </Text>
-            </View>
+            </Card>
           </View>
-        </TouchableOpacity>
+
+          {/* 사용처 도넛 */}
+          {pieData.length > 0 && (
+            <Card onPress={() => router.push("/(tabs)/finance")}>
+              <Text style={styles.financeLabel}>사용처</Text>
+              <View style={styles.donutWrap}>
+                <PieChart
+                  data={pieData}
+                  donut
+                  radius={70}
+                  innerRadius={45}
+                  centerLabelComponent={() => (
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={styles.donutCenterLabel}>총 지출</Text>
+                      <Text style={styles.donutCenterValue}>{won(expense)}</Text>
+                    </View>
+                  )}
+                />
+              </View>
+              <View style={styles.legend}>
+                {pieData.map((d) => (
+                  <View key={d.label} style={styles.legendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: d.color }]} />
+                    <Text style={styles.legendLabel}>{d.label}</Text>
+                    <Text style={styles.legendValue}>{won(d.value)}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+        </Widget>
 
         {/* 바로가기 */}
-        <View className="mx-5 mb-8">
-          <Text className="text-gray-500 text-xs mb-3 font-medium">바로가기</Text>
-          <View className="flex-row flex-wrap justify-between">
+        <Widget>
+          <Text style={styles.widgetTitle}>바로가기</Text>
+          <View style={styles.shortcutGrid}>
             {SHORTCUTS.map(({ label, route, Icon, color, bg }) => (
-              <TouchableOpacity
+              <Card
                 key={label}
-                className="bg-white rounded-2xl p-4 shadow-sm mb-3 items-center"
-                style={{ width: "31.5%" }}
+                style={styles.shortcutCard}
                 onPress={() => router.push(route as any)}
               >
                 <View
@@ -267,11 +311,11 @@ export default function HomeScreen() {
                 >
                   <Icon size={24} color={color} weight="duotone" />
                 </View>
-                <Text className="text-gray-700 text-xs font-medium">{label}</Text>
-              </TouchableOpacity>
+                <Text style={styles.shortcutLabel}>{label}</Text>
+              </Card>
             ))}
           </View>
-        </View>
+        </Widget>
       </ScrollView>
 
       {/* 그룹 전환 bottom sheet */}
@@ -285,20 +329,16 @@ export default function HomeScreen() {
           return (
             <TouchableOpacity
               key={g.id}
-              className="flex-row items-center justify-between py-3"
+              style={styles.sheetRow}
               onPress={() => {
                 setActiveGroup(g);
                 setGroupSheet(false);
               }}
             >
-              <Text
-                className={`text-base ${
-                  active ? "text-primary-600 font-bold" : "text-gray-800"
-                }`}
-              >
+              <Text style={[styles.sheetGroupName, active && styles.sheetGroupActive]}>
                 {g.name}
               </Text>
-              {active && <Check size={20} color="#4f46e5" weight="bold" />}
+              {active && <Check size={20} color={Colors.primary} weight="bold" />}
             </TouchableOpacity>
           );
         })}
@@ -311,40 +351,140 @@ export default function HomeScreen() {
         title={`가족 멤버 ${members.length}명`}
       >
         {members.map((m) => (
-          <View key={m.id} className="flex-row items-center py-3">
-            <View className="w-11 h-11 rounded-full bg-primary-100 items-center justify-center mr-3">
-              <Text className="text-primary-600 font-bold text-base">
+          <View key={m.id} style={styles.memberRow}>
+            <View style={styles.memberAvatar}>
+              <Text style={styles.memberAvatarText}>
                 {m.profile.displayName[0]}
               </Text>
             </View>
-            <View className="flex-1">
-              <Text className="text-gray-900 font-semibold">
-                {m.profile.displayName}
-              </Text>
-              <Text className="text-gray-400 text-sm">{m.profile.email}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.memberName}>{m.profile.displayName}</Text>
+              <Text style={styles.memberEmail}>{m.profile.email}</Text>
             </View>
             {m.role === "owner" && (
-              <View className="bg-primary-50 rounded-full px-2.5 py-1">
-                <Text className="text-primary-600 text-xs font-medium">방장</Text>
+              <View style={styles.ownerBadge}>
+                <Text style={styles.ownerBadgeText}>방장</Text>
               </View>
             )}
           </View>
         ))}
         <TouchableOpacity
-          className="mt-3"
+          style={styles.memberRow}
           onPress={() => {
             setMemberSheet(false);
             router.push("/group/invite");
           }}
         >
-          <View className="flex-row items-center py-3">
-            <View className="w-11 h-11 rounded-full bg-gray-100 items-center justify-center mr-3">
-              <Plus size={20} color="#9ca3af" weight="bold" />
-            </View>
-            <Text className="text-gray-500 font-medium">가족 초대하기</Text>
+          <View style={[styles.memberAvatar, styles.inviteAvatar]}>
+            <Plus size={20} color={Colors.textLight} weight="bold" />
           </View>
+          <Text style={styles.inviteText}>가족 초대하기</Text>
         </TouchableOpacity>
       </BottomSheet>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Colors.background },
+
+  // 빈 상태
+  emptyWrap: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryUltraLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  emptyTitle: { ...Typography.h3, fontSize: 20, fontWeight: "700", marginBottom: 8 },
+  emptyDesc: { ...Typography.body, color: Colors.textSub, textAlign: "center", lineHeight: 22, marginBottom: 32 },
+
+  // 헤더
+  header: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderBottomLeftRadius: Radius.xl,
+    borderBottomRightRadius: Radius.xl,
+  },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+  row: { flexDirection: "row", alignItems: "center" },
+  groupName: { color: "#ffffff", fontSize: 18, fontWeight: "700" },
+  logoutText: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginLeft: 4 },
+  greeting: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginBottom: 8 },
+
+  // 위젯 공통
+  widgetTitle: { ...Typography.label, marginLeft: 6 },
+  widgetHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+
+  // 가족 멤버
+  headerMember: { flexDirection: "row", alignItems: "center", paddingTop: 8, paddingLeft: 8 },
+  avatar: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 2,
+    borderColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { color: Colors.primary, fontWeight: "700", fontSize: 11 },
+  avatarExtra: { backgroundColor: Colors.border },
+  avatarExtraText: { color: Colors.textSub, fontWeight: "700", fontSize: 12 },
+
+  // 일정
+  emptyText: { color: Colors.textSub, fontSize: 14 },
+  scheduleRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  dot: { width: 8, height: 8, borderRadius: Radius.full, marginRight: 12 },
+  scheduleTitle: { color: Colors.text, flex: 1 },
+  scheduleTime: { color: Colors.textSub, fontSize: 13, marginLeft: 8 },
+
+  // 가계부
+  financeLabel: { color: Colors.textSub, fontSize: 12, marginBottom: 4 },
+  financeValue: { fontWeight: "700", fontSize: 16, textAlign: "right" },
+  financeValueLg: { fontWeight: "700", fontSize: 22, textAlign: "right" },
+  financeRow: { flexDirection: "row" },
+  financeHalf: { flex: 1 },
+  donutWrap: { alignItems: "center", marginTop: 12, marginBottom: 12 },
+  donutCenterLabel: { fontSize: 11, color: Colors.textSub },
+  donutCenterValue: { fontSize: 13, fontWeight: "700", color: Colors.text },
+  legend: { marginTop: 4 },
+  legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: Radius.full, marginRight: 8 },
+  legendLabel: { color: Colors.textSub, fontSize: 13, flex: 1 },
+  legendValue: { color: Colors.text, fontSize: 13, fontWeight: "600" },
+
+  // 바로가기
+  shortcutGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", gap: 8, marginTop: 8 },
+  shortcutCard: { width: "31%", margin: 0, marginBottom: 10, alignItems: "center" },
+  shortcutLabel: { color: Colors.text, fontSize: 12, fontWeight: "500" },
+
+  // 그룹 선택 시트
+  sheetRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 },
+  sheetGroupName: { fontSize: 16, color: Colors.text },
+  sheetGroupActive: { color: Colors.primary, fontWeight: "700" },
+
+  // 멤버 상세 시트
+  memberRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12 },
+  memberAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryUltraLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  memberAvatarText: { color: Colors.primary, fontWeight: "700", fontSize: 16 },
+  memberName: { color: Colors.text, fontWeight: "600" },
+  memberEmail: { color: Colors.textSub, fontSize: 13 },
+  ownerBadge: { backgroundColor: Colors.primaryUltraLight, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
+  ownerBadgeText: { color: Colors.primary, fontSize: 12, fontWeight: "500" },
+  inviteAvatar: { backgroundColor: Colors.border },
+  inviteText: { color: Colors.textSub, fontWeight: "500" },
+});

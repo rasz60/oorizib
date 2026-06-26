@@ -4,6 +4,28 @@
 
 ---
 
+## (미커밋) 2026-06-26 — 메인 페이지 디자인 시스템 표준화 + 가계부 위젯 완성
+
+사용자가 도입한 디자인 토큰(`constants/theme.ts`)과 `Card`/`Widget` 공통 컴포넌트 기준으로 메인 페이지를 일원화하고, tobe 4번 가계부 위젯 스펙을 마저 구현.
+
+### 표준화 (`app/(tabs)/index.tsx`)
+- NativeWind `className`/`StyleSheet` 혼용 제거 → `theme.ts`(`Colors`/`Radius`/`Typography`) + `StyleSheet` 로 통일(헤더·구성원·일정·가계부·바로가기·바텀시트 전부). 단, 바로가기 아이콘 원형 배경은 동적 tailwind `bg-*` 라 `className` 유지.
+- 하드코딩 인디고(`#4f46e5`) → 테마 라벤더(`Colors.primary`).
+
+### 레이아웃 / 버그 수정
+- 구성원 위젯을 별도 카드 → 헤더(보라 배경) 내부로 이동, 흰색 20px 겹친 아바타 + 멤버 상세 `BottomSheet` 유지.
+- 가계부 "잔고"가 `income` 을 출력하던 버그 → 실제 잔고로 교체.
+- 바로가기: 세로로 깨지던 레이아웃 → `flexWrap + gap` 3열 그리드 복원(`Card` 기본 margin 0 오버라이드).
+
+### tobe 4 가계부 위젯 스펙 완성
+- 계좌 잔고(full width): `home-balance` 쿼리(그룹 전체 누적 수입-지출) 신규. ※ `bank_accounts` 에 잔고 컬럼이 없어 거래 누적으로 산출(추후 오픈뱅킹 실잔고 연동 여지).
+- 수입/지출(1/2씩) + 사용처 도넛(`monthTx` 에 `category` 추가, `EXPENSE_CATEGORIES` 집계 → `PieChart` 도넛 + 범례).
+
+### 공통 컴포넌트 (사용자 추가, 본 커밋에 포함)
+- `constants/theme.ts`(디자인 토큰), `components/ui/Card.tsx`, `components/ui/Widget.tsx`.
+
+> 타입 체크 통과(변경 파일 에러 없음).
+
 ## 2026-06-05 — `d380329` feat: initial commit - Oorizib React Native (Expo) app
 
 Oorizib React Native(Expo) 앱 초기 커밋. 총 46개 파일.
