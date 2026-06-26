@@ -4,9 +4,8 @@ import {
   House,
   CalendarBlank,
   Wallet,
-  ShoppingBag,
-  ChartLineUp,
   SquaresFour,
+  DotsNine,
   type Icon,
 } from "phosphor-react-native";
 import { useAuthStore } from "@/stores/authStore";
@@ -39,7 +38,12 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: "홈", tabBarLabel: "홈", tabBarIcon: tabIcon(House) }}
+        options={{
+          title: "홈",
+          // 홈은 아이콘만 표시(텍스트 제외)
+          tabBarLabel: () => null,
+          tabBarIcon: tabIcon(House),
+        }}
       />
       <Tabs.Screen
         name="calendar"
@@ -58,22 +62,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="wishlist"
-        options={{
-          title: "위시",
-          tabBarLabel: "위시",
-          tabBarIcon: tabIcon(ShoppingBag),
-        }}
-      />
-      <Tabs.Screen
-        name="invest"
-        options={{
-          title: "재테크",
-          tabBarLabel: "재테크",
-          tabBarIcon: tabIcon(ChartLineUp),
-        }}
-      />
-      <Tabs.Screen
         name="utility"
         options={{
           title: "유틸",
@@ -81,6 +69,18 @@ export default function TabsLayout() {
           tabBarIcon: tabIcon(SquaresFour),
         }}
       />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: "전체보기",
+          tabBarLabel: "전체보기",
+          tabBarIcon: tabIcon(DotsNine),
+        }}
+      />
+
+      {/* 탭 바에는 노출하지 않지만 라우트로는 접근 가능 (전체보기에서 진입) */}
+      <Tabs.Screen name="wishlist" options={{ href: null }} />
+      <Tabs.Screen name="invest" options={{ href: null }} />
     </Tabs>
   );
 }

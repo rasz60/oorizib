@@ -93,3 +93,11 @@ Oorizib React Native(Expo) 앱 초기 커밋. 총 46개 파일.
 - `stores/groupStore.ts`: `createGroup`을 RPC 호출로 변경.
 
 > ✅ 004/005/006 Supabase 적용·검증 완료(2026-06-26) — 그룹 생성/참여 정상 동작 확인.
+
+## (미커밋) 2026-06-26 — tobe 3·4 구현 (하단 탭 + 메인 위젯)
+
+[tobe.md](../tobe/tobe.md) 3·4번 구현. 웹 export 검증(exit 0).
+- 탭 3번: `(tabs)/_layout.tsx` 5탭 재구성(홈 아이콘만, 위시·재테크 `href:null`), `(tabs)/more.tsx`(전체보기) 신규.
+- 위젯 4번: `(tabs)/index.tsx` — 그룹 토글 BottomSheet, 가족 멤버 위젯(겹친 아바타 최대 3 + 상세 BottomSheet), 오늘 일정/이번달 가계부 위젯, 바로가기에서 일정·가계부 제외.
+- `components/ui/BottomSheet.tsx` 신규(공통 하단 모달).
+- 참고: push 는 인증 토큰 문제(rasz60 만료, dzznzz 권한 없음)로 보류 — 사용자 재인증 후 `git push` 필요.
