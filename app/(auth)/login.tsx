@@ -4,24 +4,31 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
+import { translateAuthError } from "@/lib/authErrors";
+import { Button } from "@/components/ui/Button";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const handleLogin = async () => {
+    setError(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
     setLoading(false);
-    if (error) Alert.alert("로그인 오류", error.message);
+    // 성공 시 onAuthStateChange 가 세션을 채우고 (auth)/_layout 이 (tabs)로 이동시킨다.
+    if (error) setError(translateAuthError(error.message));
   };
 
   return (
@@ -33,9 +40,16 @@ export default function LoginScreen() {
         <Text className="text-3xl font-bold text-primary-600 mb-2">Oorizib</Text>
         <Text className="text-gray-500 mb-10">우리 가족만의 공간</Text>
 
+        {error && (
+          <View className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4">
+            <Text className="text-red-600">{error}</Text>
+          </View>
+        )}
+
         <TextInput
           className="border border-gray-200 rounded-xl px-4 py-3 mb-3 text-gray-800"
           placeholder="이메일"
+          placeholderTextColor="#9ca3af"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -44,20 +58,13 @@ export default function LoginScreen() {
         <TextInput
           className="border border-gray-200 rounded-xl px-4 py-3 mb-6 text-gray-800"
           placeholder="비밀번호"
+          placeholderTextColor="#9ca3af"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
 
-        <TouchableOpacity
-          className="bg-primary-600 rounded-xl py-4 items-center"
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          <Text className="text-white font-semibold text-base">
-            {loading ? "로그인 중..." : "로그인"}
-          </Text>
-        </TouchableOpacity>
+        <Button label="로그인" loading={loading} onPress={handleLogin} />
 
         <TouchableOpacity
           className="mt-4 items-center"

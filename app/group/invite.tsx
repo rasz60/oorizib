@@ -1,11 +1,12 @@
-import { View, Text, TouchableOpacity, Share, Alert } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { View, Text, Share } from "react-native";
+import { ShareNetwork } from "phosphor-react-native";
 import { useGroupStore } from "@/stores/groupStore";
+import { Screen } from "@/components/ui/Screen";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { Button } from "@/components/ui/Button";
 
 export default function InviteScreen() {
   const { activeGroup } = useGroupStore();
-  const router = useRouter();
 
   const handleShare = async () => {
     if (!activeGroup) return;
@@ -15,11 +16,8 @@ export default function InviteScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white px-6">
-      <TouchableOpacity className="mt-4 mb-8" onPress={() => router.back()}>
-        <Text className="text-primary-600">← 뒤로</Text>
-      </TouchableOpacity>
-      <Text className="text-2xl font-bold text-gray-800 mb-4">가족 초대</Text>
+    <Screen scroll bg="bg-white">
+      <ScreenHeader title="가족 초대" />
       <Text className="text-gray-500 mb-8">
         아래 초대 코드를 가족에게 공유하세요.
       </Text>
@@ -31,12 +29,11 @@ export default function InviteScreen() {
         </Text>
       </View>
 
-      <TouchableOpacity
-        className="bg-primary-600 rounded-xl py-4 items-center"
+      <Button
+        label="초대 링크 공유하기"
+        icon={<ShareNetwork size={18} color="#ffffff" weight="bold" />}
         onPress={handleShare}
-      >
-        <Text className="text-white font-semibold">초대 링크 공유하기</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+      />
+    </Screen>
   );
 }

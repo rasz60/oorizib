@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { useGroupStore } from "@/stores/groupStore";
 import { useNotificationStore } from "@/stores/notificationStore";
+import { FeedbackProvider } from "@/components/ui/FeedbackProvider";
 import "../global.css";
 
 const queryClient = new QueryClient({
@@ -43,11 +44,13 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
+      <FeedbackProvider>
+        <StatusBar style="auto" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+      </FeedbackProvider>
     </QueryClientProvider>
   );
 }

@@ -73,40 +73,38 @@ export const useGroupStore = create<GroupState>((set, get) => ({
   },
 
   createGroup: async (name, description, ownerId) => {
-    const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { data: group, error } = await supabase
-      .from("groups")
-      .insert({ name, description, invite_code: inviteCode, owner_id: ownerId })
-      .select()
-      .single();
+    // 그룹 생성 + owner 멤버 등록을 원자적으로 처리하는 SECURITY DEFINER RPC 사용.
+    // (직접 INSERT 시 RETURNING 이 RLS SELECT 정책에 막혀 실패)
+    const { data, error } = await (supabase.rpc as any)("create_group", {
+      _name: name,
+      _description: description,
+    }).single();
 
-    if (error || !group) throw error;
+    if (error || !data) {
+      throw new Error(error?.message ?? "그룹 생성에 실패했습니다.");
+    }
 
-    await supabase.from("group_members").insert({
-      group_id: group.id,
-      user_id: ownerId,
-      role: "owner",
-    });
-
+    const group = data as { id: string };
     await get().fetchGroups(ownerId);
     return get().groups.find((g) => g.id === group.id)!;
   },
 
   joinGroup: async (inviteCode, userId) => {
-    const { data: group, error } = await supabase
-      .from("groups")
-      .select("*")
-      .eq("invite_code", inviteCode)
-      .single();
+    // 비멤버도 초대 코드로 가입할 수 있도록 SECURITY DEFINER RPC 사용.
+    // (groups SELECT 정책상 비멤버는 직접 조회 불가. 함수는 types/database 에
+    //  포함돼 있지 않아 rpc 호출은 캐스팅으로 처리한다.)
+    const { data, error } = await (supabase.rpc as any)("join_group_by_code", {
+      _invite_code: inviteCode,
+    }).single();
 
-    if (error || !group) throw new Error("초대 코드가 올바르지 않습니다.");
+    if (error || !data) {
+      if (error?.message?.includes("INVALID_CODE")) {
+        throw new Error("초대 코드가 올바르지 않습니다.");
+      }
+      throw new Error(error?.message ?? "그룹 참여에 실패했습니다.");
+    }
 
-    await supabase.from("group_members").insert({
-      group_id: group.id,
-      user_id: userId,
-      role: "member",
-    });
-
+    const group = data as { id: string };
     await get().fetchGroups(userId);
     return get().groups.find((g) => g.id === group.id)!;
   },
