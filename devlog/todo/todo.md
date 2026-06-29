@@ -4,6 +4,25 @@
 
 ---
 
+## (미커밋) 2026-06-29 — 토스뱅크 스타일 UI 전면 개편 + 가계부 도넛 위젯 리디자인
+
+[tobe.md](../tobe/tobe.md) 6·7번 구현. 전체 디자인 컨셉을 라벤더/보라 → 토스뱅크 스타일로 교체.
+
+### 디자인 토큰 (`constants/theme.ts`)
+- 팔레트 교체: Toss Blue(`#3182F6`) + 뉴트럴 그레이 스케일(text `#191F28`, sub `#4E5968`, light `#8B95A1`, bg `#F2F4F6`, border `#E5E8EB`). income/expense는 토스 톤(success `#15B86A` / danger `#F04452`), widget 배경 `#FFF`.
+- `Shadow`: 보라 짙은 그림자 → 거의 안 보이는 뉴트럴 플랫 그림자(`#001733`, 낮은 opacity)로 교체. 명도 차 기반 분리.
+
+### 공통 컴포넌트
+- `components/ui/WidgetList.tsx` 신규: 흰 배경 + 라운드 + 약한 그림자 카드형 `TouchableOpacity`. 기존 `Card.tsx`를 대체.
+- `components/ui/Card.tsx` 삭제.
+- `components/ui/Widget.tsx`: 라운드(`Radius.md`) + 상하 margin 8로 조정.
+
+### 메인 페이지 (`app/(tabs)/index.tsx`)
+- 헤더: 보라 배경 블록 → 흰 배경 + 다크 텍스트 + 하단 보더. 그룹명 22pt 볼드(좌측 정렬, 그룹 토글), 로그아웃 우측. 겹친 아바타 흰 배경 → 연블루 틴트.
+- 가계부 위젯을 최상단으로 이동. `Card` → `WidgetList`로 전환.
+- 사용처 도넛 토스 분석 스타일로: 얇은 링(radius 80/inner 62, 흰 중앙) + 중앙 "이번 달 지출" 총액. 범례를 비율 막대(점·이름·퍼센트·금액 + 가로 막대) + 금액 내림차순 정렬. 빈 상태 문구 추가.
+- 차트 팔레트(`PIE_COLORS`)를 토스 블루 계열로 교체. 바로가기 카드 폭 조정.
+
 ## (미커밋) 2026-06-26 — 메인 페이지 디자인 시스템 표준화 + 가계부 위젯 완성
 
 사용자가 도입한 디자인 토큰(`constants/theme.ts`)과 `Card`/`Widget` 공통 컴포넌트 기준으로 메인 페이지를 일원화하고, tobe 4번 가계부 위젯 스펙을 마저 구현.

@@ -20,8 +20,10 @@ export function Widget({ children, style }: WidgetProps) {
 const styles = StyleSheet.create({
   widget: {
     backgroundColor: Colors.widget,
+    borderRadius: Radius.md,
     padding: 15,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 8,
     marginLeft: 12,
     marginRight: 12
   },

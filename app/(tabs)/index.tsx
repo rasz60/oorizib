@@ -25,7 +25,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useGroupStore } from "@/stores/groupStore";
 import { Button } from "@/components/ui/Button";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Card } from "@/components/ui/Card";
+import { WidgetList } from "@/components/ui/WidgetList";
 import { Widget } from "@/components/ui/Widget";
 import { Colors, Radius, Typography } from "@/constants/theme";
 import { EXPENSE_CATEGORIES } from "@/constants";
@@ -47,7 +47,8 @@ const SHORTCUTS: Shortcut[] = [
   { label: "뭐먹지?",   route: "/utility/what-to-eat", Icon: ForkKnife, color: "#d97706", bg: "bg-amber-50" },
 ];
 
-const PIE_COLORS = ["#9B8EC4", "#F4A261", "#6BCB8B", "#E07070", "#6CA0DC", "#DAB910"];
+// 토스 스타일 차트 팔레트 (블루 계열 + 포인트 컬러)
+const PIE_COLORS = ["#3182F6", "#00C9A7", "#FFC845", "#FF8A5B", "#A06BFF", "#4EC3F0"];
 
 const won = (n: number) => `₩${n.toLocaleString("ko-KR")}`;
 
@@ -125,11 +126,15 @@ export default function HomeScreen() {
       .reduce((s: number, t: any) => s + t.amount, 0),
   })).filter((c) => c.total > 0);
 
-  const pieData = categoryTotals.map((c, i) => ({
-    value: c.total,
-    label: c.label,
-    color: PIE_COLORS[i % PIE_COLORS.length],
-  }));
+  const categoryTotalSum = categoryTotals.reduce((s, c) => s + c.total, 0);
+  const pieData = categoryTotals
+    .map((c, i) => ({
+      value: c.total,
+      label: c.label,
+      color: PIE_COLORS[i % PIE_COLORS.length],
+      pct: categoryTotalSum > 0 ? Math.round((c.total / categoryTotalSum) * 100) : 0,
+    }))
+    .sort((a, b) => b.value - a.value);
 
   if (!activeGroup) {
     return (
@@ -168,27 +173,24 @@ export default function HomeScreen() {
         {/* 헤더 */}
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Text style={styles.greeting}>
-              안녕하세요, {profile?.displayName}님 👋
-            </Text>
+            <TouchableOpacity
+              style={styles.row}
+              activeOpacity={groups.length > 1 ? 0.7 : 1}
+              onPress={() => groups.length > 1 && setGroupSheet(true)}
+              hitSlop={8}
+            >
+              <Text style={styles.groupName}>{activeGroup.name}</Text>
+              {groups.length > 1 && (
+                <CaretDown size={18} color={Colors.textSub} weight="bold" style={{ marginLeft: 4 }} />
+              )}
+            </TouchableOpacity>
             <TouchableOpacity onPress={signOut} style={styles.row} hitSlop={8}>
-              <SignOut size={16} color="#ffffff" />
+              <SignOut size={16} color={Colors.textLight} />
               <Text style={styles.logoutText}>로그아웃</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.row}
-            activeOpacity={groups.length > 1 ? 0.7 : 1}
-            onPress={() => groups.length > 1 && setGroupSheet(true)}
-            hitSlop={8}
-          >
-            <Text style={styles.groupName}>{activeGroup.name}</Text>
-            {groups.length > 1 && (
-              <CaretDown size={16} color="#ffffff" weight="bold" style={{ marginLeft: 4 }} />
-            )}
-          </TouchableOpacity>
           <View style={styles.headerMember}>
-            <UsersThree size={16} color="#ffffff" weight="duotone" style={{ marginRight: 6 }} />
+            <UsersThree size={16} color={Colors.textLight} weight="duotone" style={{ marginRight: 6 }} />
             <TouchableOpacity activeOpacity={0.7} style={styles.row} onPress={() => setMemberSheet(true)}>
               {previewMembers.map((m, i) => (
                 <View
@@ -207,13 +209,93 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* 가계부 위젯 */}
+        <Widget>
+          <View style={styles.widgetHeader}>
+            <Wallet size={16} color={Colors.textSub} weight="duotone" />
+            <Text style={styles.widgetTitle}>이번 달 가계부</Text>
+          </View>
+
+          {/* 사용처 도넛 (토스 스타일: 얇은 링 + 퍼센트 막대 범례) */}
+          <WidgetList onPress={() => router.push("/(tabs)/finance")}>
+            <Text style={styles.financeLabel}>이번 달 사용처</Text>
+            {pieData.length === 0 ? (
+              <Text style={[styles.emptyText, { marginTop: 8 }]}>
+                아직 지출 내역이 없어요.
+              </Text>
+            ) : (
+              <>
+                <View style={styles.donutWrap}>
+                  <PieChart
+                    data={pieData}
+                    donut
+                    radius={80}
+                    innerRadius={62}
+                    innerCircleColor={Colors.surface}
+                    centerLabelComponent={() => (
+                      <View style={{ alignItems: "center" }}>
+                        <Text style={styles.donutCenterLabel}>이번 달 지출</Text>
+                        <Text style={styles.donutCenterValue}>{won(expense)}</Text>
+                      </View>
+                    )}
+                  />
+                </View>
+                <View style={styles.legend}>
+                  {pieData.map((d) => (
+                    <View key={d.label} style={styles.legendItem}>
+                      <View style={styles.legendRow}>
+                        <View style={[styles.legendDot, { backgroundColor: d.color }]} />
+                        <Text style={styles.legendLabel}>{d.label}</Text>
+                        <Text style={styles.legendPct}>{d.pct}%</Text>
+                        <Text style={styles.legendValue}>{won(d.value)}</Text>
+                      </View>
+                      <View style={styles.legendBarTrack}>
+                        <View
+                          style={[
+                            styles.legendBarFill,
+                            { width: `${d.pct}%`, backgroundColor: d.color },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </WidgetList>
+
+          {/* 계좌 잔고 (full width) */}
+          <WidgetList onPress={() => router.push("/(tabs)/finance")}>
+            <Text style={styles.financeLabel}>계좌 잔고</Text>
+            <Text style={[styles.financeValueLg, { color: Colors.text }]}>
+              {won(balance)}
+            </Text>
+          </WidgetList>
+
+          {/* 수입 / 지출 */}
+          <View style={styles.financeRow}>
+            <WidgetList onPress={() => router.push("/(tabs)/finance")} style={styles.financeHalf}>
+              <Text style={styles.financeLabel}>수입</Text>
+              <Text style={[styles.financeValue, { color: Colors.success }]}>
+                {won(income)}
+              </Text>
+            </WidgetList>
+            <WidgetList onPress={() => router.push("/(tabs)/finance")} style={styles.financeHalf}>
+              <Text style={styles.financeLabel}>지출</Text>
+              <Text style={[styles.financeValue, { color: Colors.danger }]}>
+                {won(expense)}
+              </Text>
+            </WidgetList>
+          </View>
+        </Widget>
+
         {/* 일정 위젯 */}
         <Widget>
           <View style={styles.widgetHeader}>
             <CalendarBlank size={16} color={Colors.textSub} weight="duotone" />
             <Text style={styles.widgetTitle}>오늘 일정</Text>
           </View>
-          <Card onPress={() => router.push("/(tabs)/calendar")}>
+          <WidgetList onPress={() => router.push("/(tabs)/calendar")}>
             {todaySchedules.length === 0 ? (
               <Text style={styles.emptyText}>오늘 등록된 일정이 없어요.</Text>
             ) : (
@@ -231,69 +313,7 @@ export default function HomeScreen() {
                 </View>
               ))
             )}
-          </Card>
-        </Widget>
-
-        {/* 가계부 위젯 */}
-        <Widget>
-          <View style={styles.widgetHeader}>
-            <Wallet size={16} color={Colors.textSub} weight="duotone" />
-            <Text style={styles.widgetTitle}>이번 달 가계부</Text>
-          </View>
-
-          {/* 계좌 잔고 (full width) */}
-          <Card onPress={() => router.push("/(tabs)/finance")}>
-            <Text style={styles.financeLabel}>계좌 잔고</Text>
-            <Text style={[styles.financeValueLg, { color: Colors.text }]}>
-              {won(balance)}
-            </Text>
-          </Card>
-
-          {/* 수입 / 지출 */}
-          <View style={styles.financeRow}>
-            <Card onPress={() => router.push("/(tabs)/finance")} style={styles.financeHalf}>
-              <Text style={styles.financeLabel}>수입</Text>
-              <Text style={[styles.financeValue, { color: Colors.success }]}>
-                {won(income)}
-              </Text>
-            </Card>
-            <Card onPress={() => router.push("/(tabs)/finance")} style={styles.financeHalf}>
-              <Text style={styles.financeLabel}>지출</Text>
-              <Text style={[styles.financeValue, { color: Colors.danger }]}>
-                {won(expense)}
-              </Text>
-            </Card>
-          </View>
-
-          {/* 사용처 도넛 */}
-          {pieData.length > 0 && (
-            <Card onPress={() => router.push("/(tabs)/finance")}>
-              <Text style={styles.financeLabel}>사용처</Text>
-              <View style={styles.donutWrap}>
-                <PieChart
-                  data={pieData}
-                  donut
-                  radius={70}
-                  innerRadius={45}
-                  centerLabelComponent={() => (
-                    <View style={{ alignItems: "center" }}>
-                      <Text style={styles.donutCenterLabel}>총 지출</Text>
-                      <Text style={styles.donutCenterValue}>{won(expense)}</Text>
-                    </View>
-                  )}
-                />
-              </View>
-              <View style={styles.legend}>
-                {pieData.map((d) => (
-                  <View key={d.label} style={styles.legendRow}>
-                    <View style={[styles.legendDot, { backgroundColor: d.color }]} />
-                    <Text style={styles.legendLabel}>{d.label}</Text>
-                    <Text style={styles.legendValue}>{won(d.value)}</Text>
-                  </View>
-                ))}
-              </View>
-            </Card>
-          )}
+          </WidgetList>
         </Widget>
 
         {/* 바로가기 */}
@@ -301,7 +321,7 @@ export default function HomeScreen() {
           <Text style={styles.widgetTitle}>바로가기</Text>
           <View style={styles.shortcutGrid}>
             {SHORTCUTS.map(({ label, route, Icon, color, bg }) => (
-              <Card
+              <WidgetList
                 key={label}
                 style={styles.shortcutCard}
                 onPress={() => router.push(route as any)}
@@ -312,7 +332,7 @@ export default function HomeScreen() {
                   <Icon size={24} color={color} weight="duotone" />
                 </View>
                 <Text style={styles.shortcutLabel}>{label}</Text>
-              </Card>
+              </WidgetList>
             ))}
           </View>
         </Widget>
@@ -402,20 +422,20 @@ const styles = StyleSheet.create({
   emptyTitle: { ...Typography.h3, fontSize: 20, fontWeight: "700", marginBottom: 8 },
   emptyDesc: { ...Typography.body, color: Colors.textSub, textAlign: "center", lineHeight: 22, marginBottom: 32 },
 
-  // 헤더
+  // 헤더 (토스 스타일: 흰 배경 + 다크 텍스트)
   header: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.surface,
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 20,
-    borderBottomLeftRadius: Radius.xl,
-    borderBottomRightRadius: Radius.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   row: { flexDirection: "row", alignItems: "center" },
-  groupName: { color: "#ffffff", fontSize: 18, fontWeight: "700" },
-  logoutText: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginLeft: 4 },
-  greeting: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginBottom: 8 },
+  groupName: { color: Colors.text, fontSize: 22, fontWeight: "700" },
+  logoutText: { color: Colors.textLight, fontSize: 13, marginLeft: 4 },
+  greeting: { color: Colors.textSub, fontSize: 14, marginBottom: 8 },
 
   // 위젯 공통
   widgetTitle: { ...Typography.label, marginLeft: 6 },
@@ -424,18 +444,18 @@ const styles = StyleSheet.create({
   // 가족 멤버
   headerMember: { flexDirection: "row", alignItems: "center", paddingTop: 8, paddingLeft: 8 },
   avatar: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.primaryUltraLight,
     borderWidth: 2,
     borderColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: { color: Colors.primary, fontWeight: "700", fontSize: 11 },
-  avatarExtra: { backgroundColor: Colors.border },
-  avatarExtraText: { color: Colors.textSub, fontWeight: "700", fontSize: 12 },
+  avatarExtra: { backgroundColor: Colors.background },
+  avatarExtraText: { color: Colors.textSub, fontWeight: "700", fontSize: 11 },
 
   // 일정
   emptyText: { color: Colors.textSub, fontSize: 14 },
@@ -445,23 +465,32 @@ const styles = StyleSheet.create({
   scheduleTime: { color: Colors.textSub, fontSize: 13, marginLeft: 8 },
 
   // 가계부
-  financeLabel: { color: Colors.textSub, fontSize: 12, marginBottom: 4 },
-  financeValue: { fontWeight: "700", fontSize: 16, textAlign: "right" },
-  financeValueLg: { fontWeight: "700", fontSize: 22, textAlign: "right" },
+  financeLabel: { color: Colors.textSub, fontSize: 13, marginBottom: 4 },
+  financeValue: { fontWeight: "700", fontSize: 17, textAlign: "right" },
+  financeValueLg: { fontWeight: "700", fontSize: 24, textAlign: "right" },
   financeRow: { flexDirection: "row" },
   financeHalf: { flex: 1 },
-  donutWrap: { alignItems: "center", marginTop: 12, marginBottom: 12 },
-  donutCenterLabel: { fontSize: 11, color: Colors.textSub },
-  donutCenterValue: { fontSize: 13, fontWeight: "700", color: Colors.text },
+  donutWrap: { alignItems: "center", marginTop: 16, marginBottom: 20 },
+  donutCenterLabel: { fontSize: 12, color: Colors.textLight, marginBottom: 2 },
+  donutCenterValue: { fontSize: 16, fontWeight: "700", color: Colors.text },
   legend: { marginTop: 4 },
+  legendItem: { marginBottom: 12 },
   legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
   legendDot: { width: 10, height: 10, borderRadius: Radius.full, marginRight: 8 },
-  legendLabel: { color: Colors.textSub, fontSize: 13, flex: 1 },
-  legendValue: { color: Colors.text, fontSize: 13, fontWeight: "600" },
+  legendLabel: { color: Colors.text, fontSize: 14, fontWeight: "500", flex: 1 },
+  legendPct: { color: Colors.textSub, fontSize: 13, fontWeight: "600", marginRight: 10 },
+  legendValue: { color: Colors.text, fontSize: 14, fontWeight: "700" },
+  legendBarTrack: {
+    height: 6,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.background,
+    overflow: "hidden",
+  },
+  legendBarFill: { height: 6, borderRadius: Radius.full },
 
   // 바로가기
   shortcutGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", gap: 8, marginTop: 8 },
-  shortcutCard: { width: "31%", margin: 0, marginBottom: 10, alignItems: "center" },
+  shortcutCard: { width: "100%", margin: 0, marginBottom: 10, alignItems: "center" },
   shortcutLabel: { color: Colors.text, fontSize: 12, fontWeight: "500" },
 
   // 그룹 선택 시트
